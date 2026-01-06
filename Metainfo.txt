@@ -1,0 +1,12 @@
+Name of Quantlet: A_New_EMD_Approach
+
+Published in: A New EMD Approach
+
+Description: A New EMD Approach
+
+Submitted: 06 January 2026
+
+Keywords: 
+- EMD
+
+Author:  Yezhou Sha, Volodia Spokoiny, Wolfgang Karl Härdle, David Siang-Li JHENG, Marc-Eduard Ionescu, Daniel Traian Pele
