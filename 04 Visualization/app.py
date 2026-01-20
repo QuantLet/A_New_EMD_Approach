@@ -34,6 +34,15 @@ y_noisy = y_clean + noise
 
 @st.cache_data
 def emd_decompose(y_input, x, h_start, h_min, a):
+    test_h = h_start
+    test_cnt = 0
+    while test_h >= h_min:
+        test_cnt += 1
+        test_h /= a
+        if test_cnt > 100:
+            st.error("Error: Iteration limit exceeded (>100). Please adjust parameters.")
+            st.stop()
+
     residuals_list = []
     components = []
     current_residuals = y_input.copy()
@@ -72,7 +81,6 @@ with st.spinner('Decomposing signals...'):
     components_clean, residuals_list_clean = emd_decompose(y_clean, x, h_start, h_min, a_val)
 
 n_iterations = len(components)
-st.write(f"Total Iterations: {n_iterations}")
 
 def generate_figure(i, mode):
     if i == 0:
@@ -86,12 +94,12 @@ def generate_figure(i, mode):
         fig, axes = plt.subplots(6, 1, figsize=(10, 18), sharex=True)
         
         data_list = [
-            curr_input_noisy,      # noisy (old residual)
-            curr_input_clean,      # original (old residual)
-            components[i],         # noisy (IMF)
-            components_clean[i],   # original (IMF)
-            residuals_list[i],     # noisy (new residual)
-            residuals_list_clean[i]# original (new residual)
+            curr_input_noisy,
+            curr_input_clean,
+            components[i],
+            components_clean[i],
+            residuals_list[i],
+            residuals_list_clean[i]
         ]
         
         colors = ['gray', 'black', 'salmon', 'salmon', 'salmon', 'salmon']
@@ -143,18 +151,21 @@ if n_iterations > 0:
     if 'iter_index' not in st.session_state:
         st.session_state.iter_index = 0
 
-    col_prev, col_slider, col_next = st.columns([1, 10, 1])
-    
+    col_info, col_prev, col_slider, col_next = st.columns([5, 1, 8, 1])
+
+    with col_info:
+        st.markdown(f"# Total Iterations: {n_iterations}")
+
     with col_prev:
         if st.button("◀"):
-            st.session_state.iter_index = max(0, st.session_state.iter_index - 1)
+            st.session_state.iter_index = max(1, st.session_state.iter_index - 1)
             
     with col_next:
         if st.button("▶"):
-            st.session_state.iter_index = min(n_iterations - 1, st.session_state.iter_index + 1)
+            st.session_state.iter_index = min(n_iterations, st.session_state.iter_index + 1)
 
     with col_slider:
-        selected_iter = st.slider("Select Iteration to View", 0, n_iterations - 1, key="iter_index")
+        selected_iter = st.slider("Select Iteration to View", 1, n_iterations, key="iter_index")
     
-    fig = generate_figure(selected_iter, view_mode)
+    fig = generate_figure(selected_iter - 1, view_mode)
     st.pyplot(fig)
