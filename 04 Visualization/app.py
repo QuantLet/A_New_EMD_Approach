@@ -3,6 +3,8 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import minimize_scalar
 import matplotlib.pyplot as plt
+import zipfile
+import io
 
 st.set_page_config(layout="wide")
 
@@ -18,6 +20,7 @@ except:
     st.stop()
 
 noise_std = st.sidebar.number_input("sigma (noise_std)", value=0.2, step=0.05)
+view_mode = st.sidebar.selectbox("Display Mode", ["3 x 2", "6 x 1"])
 
 n_points = 2000
 eps = 1e-3
@@ -71,11 +74,7 @@ with st.spinner('Decomposing signals...'):
 n_iterations = len(components)
 st.write(f"Total Iterations: {n_iterations}")
 
-if n_iterations > 0:
-    selected_iter = st.slider("Select Iteration to View", 0, n_iterations - 1, 0)
-    
-    i = selected_iter
-    
+def generate_figure(i, mode):
     if i == 0:
         curr_input_noisy = y_noisy
         curr_input_clean = y_clean
@@ -83,24 +82,79 @@ if n_iterations > 0:
         curr_input_noisy = residuals_list[i-1]
         curr_input_clean = residuals_list_clean[i-1]
 
-    fig, axes = plt.subplots(3, 2, figsize=(16,8), sharex=True)
+    if mode == "6 x 1":
+        fig, axes = plt.subplots(6, 1, figsize=(10, 18), sharex=True)
+        
+        data_list = [
+            curr_input_noisy,      # noisy (old residual)
+            curr_input_clean,      # original (old residual)
+            components[i],         # noisy (IMF)
+            components_clean[i],   # original (IMF)
+            residuals_list[i],     # noisy (new residual)
+            residuals_list_clean[i]# original (new residual)
+        ]
+        
+        colors = ['gray', 'black', 'salmon', 'salmon', 'salmon', 'salmon']
+        alphas = [0.5, 1.0, 1.0, 1.0, 1.0, 1.0]
+        widths = [1.5, 2.0, 2.0, 2.0, 2.0, 2.0]
 
-    titles = ["Noisy Signal", "Clean Signal"]
-    for ax, title in zip(axes[0], titles):
-        ax.set_title(title)
-
-    axes[0, 0].plot(x, curr_input_noisy, color='gray', linewidth=1.5, alpha=0.5)
-    axes[0, 1].plot(x, curr_input_clean, color='black', linestyle='-', linewidth=2)
-
-    axes[1, 0].plot(x, components[i], color='salmon', linestyle='-', linewidth=2)
-    axes[1, 1].plot(x, components_clean[i], color='salmon', linestyle='-', linewidth=2)
-
-    axes[2, 0].plot(x, residuals_list[i], color='salmon', linestyle='-', linewidth=2)
-    axes[2, 1].plot(x, residuals_list_clean[i], color='salmon', linestyle='-', linewidth=2)
-
-    for ax_row in axes:
-        for ax in ax_row:
+        for ax, data, col, alph, wid in zip(axes, data_list, colors, alphas, widths):
+            ax.plot(x, data, color=col, linewidth=wid, alpha=alph)
             ax.set_ylim(-2.5, 2.5)
 
+    else:
+        fig, axes = plt.subplots(3, 2, figsize=(16,6), sharex=True)
+
+        axes[0, 0].plot(x, curr_input_noisy, color='gray', linewidth=1.5, alpha=0.5)
+        axes[0, 1].plot(x, curr_input_clean, color='black', linestyle='-', linewidth=2)
+
+        axes[1, 0].plot(x, components[i], color='salmon', linestyle='-', linewidth=2)
+        axes[1, 1].plot(x, components_clean[i], color='salmon', linestyle='-', linewidth=2)
+
+        axes[2, 0].plot(x, residuals_list[i], color='salmon', linestyle='-', linewidth=2)
+        axes[2, 1].plot(x, residuals_list_clean[i], color='salmon', linestyle='-', linewidth=2)
+
+        for ax_row in axes:
+            for ax in ax_row:
+                ax.set_ylim(-2.5, 2.5)
+    
     plt.tight_layout()
+    return fig
+
+if n_iterations > 0:
+    st.sidebar.markdown("---")
+    if st.sidebar.button("Save All Iterations to ZIP"):
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w") as zf:
+            for k in range(n_iterations):
+                fig = generate_figure(k, view_mode)
+                img_bytes = io.BytesIO()
+                fig.savefig(img_bytes, format='png', dpi=144, transparent=True)
+                plt.close(fig)
+                zf.writestr(f"iteration_{k:03d}.png", img_bytes.getvalue())
+        
+        st.sidebar.download_button(
+            label="Download ZIP",
+            data=zip_buffer.getvalue(),
+            file_name="iterations.zip",
+            mime="application/zip"
+        )
+
+    if 'iter_index' not in st.session_state:
+        st.session_state.iter_index = 0
+
+    col_prev, col_slider, col_next = st.columns([1, 10, 1])
+    
+    with col_prev:
+        if st.button("◀"):
+            st.session_state.iter_index = max(0, st.session_state.iter_index - 1)
+            
+    with col_next:
+        if st.button("▶"):
+            st.session_state.iter_index = min(n_iterations - 1, st.session_state.iter_index + 1)
+
+    with col_slider:
+        selected_iter = st.slider("Select Iteration to View", 0, n_iterations - 1, key="iter_index")
+    
+    fig = generate_figure(selected_iter, view_mode)
     st.pyplot(fig)
