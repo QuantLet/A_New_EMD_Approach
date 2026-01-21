@@ -60,7 +60,7 @@ def emd_decompose(y_input, x, h_start, h_min, a):
             
             u = (x[indices] - t) / h_curr
             weights = 0.75 * (1 - u**2)
-            weights = weights / (weights.sum())
+            # weights = weights / (weights.sum())
             
             def loss_function(m):
                 return np.sum(np.abs(local_res - m) * weights)
@@ -149,9 +149,11 @@ if n_iterations > 0:
         )
 
     if 'iter_index' not in st.session_state:
-        st.session_state.iter_index = 0
+        st.session_state.iter_index = 1
 
-    col_info, col_prev, col_slider, col_next = st.columns([5, 1, 8, 1])
+    selected_iter = st.sidebar.slider("Select Iteration to View", 1, n_iterations, key="iter_index")
+
+    col_info, col_prev, col_next = st.columns([6, 1, 1])
 
     with col_info:
         st.markdown(f"# Total Iterations: {n_iterations}")
@@ -163,9 +165,6 @@ if n_iterations > 0:
     with col_next:
         if st.button("▶"):
             st.session_state.iter_index = min(n_iterations, st.session_state.iter_index + 1)
-
-    with col_slider:
-        selected_iter = st.slider("Select Iteration to View", 1, n_iterations, key="iter_index")
     
     fig = generate_figure(selected_iter - 1, view_mode)
     st.pyplot(fig)
