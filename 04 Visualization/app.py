@@ -2,6 +2,7 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 from scipy.optimize import minimize_scalar
+from scipy.signal import fftconvolve
 import matplotlib.pyplot as plt
 import zipfile
 import io
@@ -60,26 +61,20 @@ def emd_decompose(y_input, x, h_start, h_min, a):
     current_residuals = y_input.copy()
     h_curr = h_start
     
+    dx = x[1] - x[0]
+
     while h_curr >= h_min:
-        n = len(x)
-        y_smooth = np.zeros(n)
+        n_window = int(np.ceil(h_curr / dx))
+        k_x = np.arange(-n_window, n_window + 1) * dx
         
-        for i in range(n):
-            t = x[i]
-            
-            indices = np.where((x >= t - h_curr) & (x <= t + h_curr))[0]
-            local_res = current_residuals[indices]
-            
-            u = (x[indices] - t) / h_curr
-            weights = 0.75 * (1 - u**2)
-            # weights = weights / (weights.sum())
-            
-            def loss_function(m):
-                return np.sum(np.abs(local_res - m) * weights)
-            result = minimize_scalar(loss_function)
-            
-            if result.success:
-                y_smooth[i] = result.x
+        weights = 0.75 * (1 - (k_x / h_curr)**2)
+        weights[weights < 0] = 0
+        weights = weights / weights.sum()
+
+        numerator = fftconvolve(current_residuals, weights, mode='same')
+        denominator = fftconvolve(np.ones_like(current_residuals), weights, mode='same')
+        
+        y_smooth = numerator / (denominator + 1e-10)
             
         components.append(y_smooth)
         current_residuals = current_residuals - y_smooth
@@ -87,6 +82,12 @@ def emd_decompose(y_input, x, h_start, h_min, a):
         h_curr /= a
         
     return components, residuals_list
+
+with st.spinner('Decomposing signals...'):
+    components, residuals_list = emd_decompose(y_noisy, x, h_start, h_min, a_val)
+    components_clean, residuals_list_clean = emd_decompose(y_clean, x, h_start, h_min, a_val)
+
+n_iterations = len(components)
 
 with st.spinner('Decomposing signals...'):
     components, residuals_list = emd_decompose(y_noisy, x, h_start, h_min, a_val)
@@ -197,10 +198,34 @@ if n_iterations > 0:
             mime="application/zip"
         )
 
-    st.markdown(f"# Total Iterations: {n_iterations}")
-    
     current_h = h_start / (a_val ** (selected_iter - 1))
-    st.write(f"Current Iteration: {selected_iter} | h: {current_h:.4f} | sigma: {noise_std}")
-    
+
+    if selected_iter % 100 in [11, 12, 13]:
+        iter_suffix = "th"
+    elif selected_iter % 10 == 1:
+        iter_suffix = "st"
+    elif selected_iter % 10 == 2:
+        iter_suffix = "nd"
+    elif selected_iter % 10 == 3:
+        iter_suffix = "rd"
+    else:
+        iter_suffix = "th"
+    iter_label = f"{selected_iter}{iter_suffix}"
+
+    header = st.container()
+    with header:
+        tcol, m1, m2 = st.columns([6, 3, 3])
+        with tcol:
+            st.markdown(f"# Total Iterations: {n_iterations}")
+        with m1:
+            st.metric("Iteration", f"{iter_label}")
+        with m2:
+            st.metric("h (bandwidth)", f"{current_h:.4f}")
+
+        denom = max(n_iterations - 1, 1)
+        progress = (selected_iter - 1) / denom
+        st.progress(progress)
+        st.caption("Iteration progress")
+
     fig = generate_figure(selected_iter - 1, view_mode)
     st.pyplot(fig)
