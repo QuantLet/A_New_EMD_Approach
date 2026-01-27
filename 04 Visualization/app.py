@@ -9,8 +9,20 @@ import io
 st.set_page_config(layout="wide")
 
 st.sidebar.title("Parameters")
-h_start = st.sidebar.number_input("h_start", value=0.1, step=0.01, format="%.2f")
-h_min = st.sidebar.number_input("h_min", value=0.02, step=0.01, format="%.2f")
+
+h_start_input = st.sidebar.text_input("h_start", value="0.1")
+try:
+    h_start = float(h_start_input)
+except:
+    st.sidebar.error("Invalid input for h_start")
+    st.stop()
+
+h_min_input = st.sidebar.text_input("h_min", value="0.02")
+try:
+    h_min = float(h_min_input)
+except:
+    st.sidebar.error("Invalid input for h_min")
+    st.stop()
 
 a_input = st.sidebar.text_input("a (Python expression, e.g., np.sqrt(2))", value="np.sqrt(2)")
 try:
@@ -131,6 +143,43 @@ def generate_figure(i, mode):
 
 if n_iterations > 0:
     st.sidebar.markdown("---")
+    
+    if 'iter_index' not in st.session_state:
+        st.session_state.iter_index = 1
+
+    col_prev, col_slide, col_next = st.sidebar.columns([1, 4, 1])
+
+    with col_prev:
+        st.button(
+            "◀",
+            key="iter_prev",
+            on_click=lambda: st.session_state.__setitem__(
+                'iter_index',
+                max(1, int(st.session_state.get('iter_index', 1)) - 1)
+            )
+        )
+
+    with col_slide:
+        selected_iter = st.slider(
+            "Select Iteration to View",
+            1,
+            n_iterations,
+            key="iter_index",
+            label_visibility="collapsed",
+        )
+
+    with col_next:
+        st.button(
+            "▶",
+            key="iter_next",
+            on_click=lambda: st.session_state.__setitem__(
+                'iter_index',
+                min(n_iterations, int(st.session_state.get('iter_index', 1)) + 1)
+            )
+        )
+
+    st.sidebar.markdown("---")
+
     if st.sidebar.button("Save All Iterations to ZIP"):
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w") as zf:
@@ -148,23 +197,10 @@ if n_iterations > 0:
             mime="application/zip"
         )
 
-    if 'iter_index' not in st.session_state:
-        st.session_state.iter_index = 1
-
-    selected_iter = st.sidebar.slider("Select Iteration to View", 1, n_iterations, key="iter_index")
-
-    col_info, col_prev, col_next = st.columns([6, 1, 1])
-
-    with col_info:
-        st.markdown(f"# Total Iterations: {n_iterations}")
-
-    with col_prev:
-        if st.button("◀"):
-            st.session_state.iter_index = max(1, st.session_state.iter_index - 1)
-            
-    with col_next:
-        if st.button("▶"):
-            st.session_state.iter_index = min(n_iterations, st.session_state.iter_index + 1)
+    st.markdown(f"# Total Iterations: {n_iterations}")
+    
+    current_h = h_start / (a_val ** (selected_iter - 1))
+    st.write(f"Current Iteration: {selected_iter} | h: {current_h:.4f} | sigma: {noise_std}")
     
     fig = generate_figure(selected_iter - 1, view_mode)
     st.pyplot(fig)
